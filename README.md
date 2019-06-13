@@ -1,6 +1,6 @@
 # Redis Key Expire
 
-Search with pattern then apply ttl
+Search with pattern if ttl not exist then apply ttl
 
 ## Build
 

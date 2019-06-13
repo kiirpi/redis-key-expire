@@ -15,12 +15,6 @@ func setExpire(item string, client redis.Client, ttl int, wg *sync.WaitGroup, pr
 	wg.Done()
 }
 
-func log(msg string, isDetail bool) {
-	if isDetail {
-		fmt.Println(msg)
-	}
-}
-
 func main() {
 
 	host := flag.String("host", "127.0.0.1", "host")
@@ -53,6 +47,9 @@ func main() {
 		fmt.Printf("%v\n", err)
 		os.Exit(1)
 	}
+
+	defer client.Close()
+
 	listLength := len(list)
 	fmt.Printf("total %d key found\n", listLength)
 	now := time.Now()
