@@ -3,16 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/go-redis/redis"
 	"os"
-	"sync"
 	"time"
+
+	"github.com/go-redis/redis"
 )
 
-func setExpire(item string, client redis.Client, ttl int, wg *sync.WaitGroup, processed *int) {
+func setExpire(item string, client redis.Client, ttl int, limitter chan struct{}) {
 	client.Expire(item, (time.Duration(ttl))*time.Second)
-	*processed = *processed + 1
-	wg.Done()
+	<-limitter
 }
 
 func main() {
@@ -20,14 +19,18 @@ func main() {
 	host := flag.String("host", "127.0.0.1", "host")
 	port := flag.String("port", "6379", "port")
 	pattern := flag.String("pattern", "", "pattern")
-	db := flag.Int("db", 5, "db number")
+	db := flag.Int("db", 0, "db number")
+	limit := flag.Int("limit", 2, "limit")
 	ttl := flag.Int("ttl", 3600, "ttl")
-	isDetail := flag.Bool("detail", false, "detail")
+	isDetail := flag.Bool("detail", false, "show some details")
+	isShowHelp := flag.Bool("help", false, "show help menu")
+	isForceTTL := flag.Bool("force", false, "force ttl ( if key has not ttl )")
 
 	flag.Parse()
 
-	if *isDetail {
-		fmt.Println("asdsada")
+	if *isShowHelp {
+		flag.PrintDefaults()
+		os.Exit(0)
 	}
 
 	if *isDetail {
@@ -36,8 +39,8 @@ func main() {
 
 	client := redis.NewClient(&redis.Options{
 		Addr:     *host + ":" + *port,
-		Password: "",  // no password set
-		DB:       *db, // use default DB
+		Password: "",
+		DB:       *db,
 	})
 
 	list, err := client.Keys(*pattern).Result()
@@ -51,30 +54,24 @@ func main() {
 	defer client.Close()
 
 	listLength := len(list)
-	fmt.Printf("total %d key found\n", listLength)
+	fmt.Printf("Total %d key found\n", listLength)
 	now := time.Now()
-	var wg sync.WaitGroup
+	limiter := make(chan struct{}, *limit)
 	remain := len(list)
 	processed := 0
 	for _, item := range list {
 		remain = remain - 1
-		keyTtl, _ := client.TTL(item).Result()
-		if keyTtl == -1 {
-			wg.Add(1)
-			go setExpire(item, *client, *ttl, &wg, &processed)
-			if *isDetail {
-				fmt.Printf("not expired\n")
-			}
+		keyTTL, _ := client.TTL(item).Result()
+		if keyTTL == -1 || *isForceTTL {
+			limiter <- struct{}{}
+			go setExpire(item, *client, *ttl, limiter)
+			processed++
 		} else {
 			if *isDetail {
-				fmt.Printf("%s %f\n", item, time.Duration(keyTtl).Seconds())
+				fmt.Printf("%s %f\n", item, time.Duration(keyTTL).Seconds())
 			}
 		}
 	}
-	wg.Wait()
-
 	diff := time.Now().Sub(now)
-
-	fmt.Printf("duration:%f total:%d processed:%d\n", diff.Seconds(), listLength, processed)
-
+	fmt.Printf("Duration:%f Total:%d Processed:%d\n", diff.Seconds(), listLength, processed)
 }
