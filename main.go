@@ -73,5 +73,5 @@ func main() {
 		}
 	}
 	diff := time.Now().Sub(now)
-	fmt.Printf("Duration:%f Total:%d Processed:%d\n", diff.Seconds(), listLength, processed)
+	fmt.Printf("Duration:%f Total:%d Processed:%d son\n", diff.Seconds(), listLength, processed)
 }
